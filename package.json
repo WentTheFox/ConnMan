@@ -1,0 +1,24 @@
+{
+  "name": "connman",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "parcel src/index.html",
+    "build": "parcel build src/index.html"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "vis-network": "^10.0.1",
+    "vue": "^3.5.18"
+  },
+  "devDependencies": {
+    "@parcel/packager-raw-url": "^2.15.4",
+    "@parcel/transformer-vue": "^2.15.4",
+    "@parcel/transformer-webmanifest": "^2.15.4",
+    "@types/vue": "^2.0.0",
+    "parcel": "^2.15.4",
+    "typescript": "^5.9.2"
+  }
+}

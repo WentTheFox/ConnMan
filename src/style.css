@@ -1,0 +1,26 @@
+body {
+  font-family: sans-serif;
+  padding: 20px;
+  background-color: #212121;
+  color: #ececec;
+}
+input, select, button {
+  margin: 5px;
+}
+#controls {
+  position: absolute;
+  top: 0;
+  left: 0;
+  margin: 10px;
+  padding: 10px;
+  background-color: rgba(0, 0, 0, .85);
+  z-index: 2;
+}
+#network-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1;
+}
