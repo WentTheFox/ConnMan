@@ -99,7 +99,8 @@ const exportToFile = async () => {
 
 // Import from file
 const importFromFile = async (e: Event) => {
-  const file = (e.target as HTMLInputElement).files?.[0];
+  const fileInput = (e.target as HTMLInputElement);
+  const file = fileInput.files?.[0];
   if (!file) return;
   const text = await file.text();
   let data;
@@ -107,6 +108,8 @@ const importFromFile = async (e: Event) => {
     data = password.value
         ? await decryptData(text, password.value)
         : JSON.parse(text);
+
+      fileInput.value = '';
   } catch {
     alert('Failed to parse or decrypt file.');
     return;

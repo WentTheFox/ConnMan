@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { Data, Edge, IdType, Node, Options } from 'vis-network';
 import { Network } from 'vis-network';
 import { onMounted, ref, watch } from 'vue';
 import { Connection, ConnectionType, Entity, EntityType } from '../util/types';
@@ -15,34 +16,31 @@ const connectionType = ref<ConnectionType>(ConnectionType.ONE_WAY);
 const networkContainer = ref<HTMLElement | null>(null);
 let network: Network;
 
+const generatePersonId = () => 'p' + Date.now();
+const generateConnectionId = () => window.crypto.randomUUID();
+
+const mapEntityToNode = (p: Entity): Node => ({
+  id: p.id,
+  label: p.name,
+  group: p.type,
+});
+
+const mapConnectionToEdge = (c: Connection): Edge => ({
+  id: c.id,
+  from: c.from,
+  to: c.to,
+  arrows: c.type === 'one-way' ? 'to' : 'to, from',
+});
+
 const renderNetwork = () => {
   if (!networkContainer.value) return;
 
-  const nodes = entities.value.map(p => {
-    return {
-      id: p.id,
-      label: p.name,
-      group: p.type,
-    };
-  });
+  const nodes: Node[] = entities.value.map(mapEntityToNode);
 
-  const edges = connections.value.map(c => ({
-    from: c.from,
-    to: c.to,
-    arrows: c.type === 'one-way' ? 'to' : 'to, from',
-  }));
+  const edges: Edge[] = connections.value.map(mapConnectionToEdge);
 
-  if (network) {
-    network.destroy();
-  }
-
-  network = new Network(networkContainer.value, { nodes, edges }, {
-    layout: {
-      /*hierarchical: {
-        direction: "UD",
-        sortMethod: "directed",
-      },*/
-    },
+  const networkData: Data = { nodes, edges };
+  const networkOptions: Options = {
     physics: {
       enabled: true,
     },
@@ -55,31 +53,74 @@ const renderNetwork = () => {
       },
       [EntityType.GROUP]: {
         color: "#936",
+        shape: 'box',
         font: {
           color: '#fde',
         },
       },
     },
-  });
+  };
+
+  if (network) {
+    network.setData(networkData);
+    network.setOptions(networkOptions);
+    return;
+  }
+
+  network = new Network(networkContainer.value, networkData, networkOptions);
   network.on('doubleClick', (e) => {
     if (e.nodes.length === 1) {
       const [nodeId] = e.nodes;
-      const entity = entities.value.find(p => p.id === nodeId);
-      const newName = prompt('Enter new name for node '+nodeId, entity?.name);
-      if (newName && newName !== entity?.name) {
-        entities.value = entities.value.map(entity => entity.id === nodeId ? {...entity, name: newName} : entity);
+      const entityIndex = entities.value.findIndex(p => p.id === nodeId);
+      if (entityIndex === -1) {
+        console.warn(`Cannot find entity with id ${nodeId}`);
+        return;
+      }
+      const entity = entities.value[entityIndex];
+      const newName = prompt(`Enter new name for node ${nodeId}`, entity.name);
+      if (newName && newName !== entity.name) {
+        entities.value = entities.value.map(entity => entity.id === nodeId ? {
+          ...entity,
+          name: newName,
+        } : entity);
+      }
+      return;
+    }
+    if (e.edges.length === 1) {
+      const [edgeId] = e.edges;
+      console.debug('edgeId', edgeId);
+      const connection = connections.value.find(c => c.id === edgeId);
+      if (!connection) {
+        console.warn(`No connection with id ${edgeId}`);
+        return;
+      }
+      switch (connection.type) {
+        case ConnectionType.ONE_WAY:
+          connections.value = connections.value.map(c => c.id === connection.id ? {
+            ...connection,
+            type: ConnectionType.BI_DIRECTIONAL,
+          } : c);
+          break;
+        case ConnectionType.BI_DIRECTIONAL:
+          connections.value = connections.value.map(c => c.id === connection.id ? {
+            ...connection,
+            type: ConnectionType.ONE_WAY,
+          } : c);
+          break;
       }
     }
-  })
+  });
 };
+
+const sortByName = <T extends { name: string }>(a: T, b: T) => a.name.localeCompare(b.name);
 
 const addEntity = () => {
   if (!newName.value.trim()) return;
-  const id = 'p' + Date.now();
+  const id = generatePersonId();
   entities.value = [
     ...entities.value,
     { id, name: newName.value.trim(), type: newType.value },
-  ];
+  ].sort(sortByName);
   newName.value = '';
 };
 
@@ -87,28 +128,35 @@ const addConnection = () => {
   if (fromId.value && toId.value && fromId.value !== toId.value) {
     connections.value = [
       ...connections.value,
-      { from: fromId.value, to: toId.value, type: connectionType.value },
+      {
+        id: generateConnectionId(),
+        from: fromId.value,
+        to: toId.value,
+        type: connectionType.value,
+      },
     ];
   }
 };
 
+const ensureConnectionHaveIds = (connections: Connection[]) => connections.map(c => c.id ? c : {
+  ...c, id: generateConnectionId(),
+});
+
 const setConnections = (newConnections: Connection[]) => {
-  console.debug('setConnections', newConnections);
-  connections.value = newConnections;
+  connections.value = ensureConnectionHaveIds(newConnections);
 };
 
 const setEntities = (newEntities: Entity[]) => {
-  console.debug('setEntities', newEntities);
-  entities.value = newEntities;
+  entities.value = newEntities.sort(sortByName);
 };
 
 onMounted(() => {
   renderNetwork();
   document.body.addEventListener('keyup', (e) => {
     if (e.key === 'Delete') {
-      const edges = network.getSelectedEdges();
-      if (edges.length > 0) {
-        edges.forEach(edge => {
+      const edgesIds: IdType[] = network.getSelectedEdges();
+      if (edgesIds.length > 0) {
+        edgesIds.forEach(edge => {
           const connectedNodes = network.getConnectedNodes(edge);
           if (connectedNodes.length === 2) {
             connections.value = connections.value.filter(connection => !(
@@ -117,8 +165,7 @@ onMounted(() => {
             ));
           }
         });
-      }
-      else {
+      } else {
         const nodes = network.getSelectedNodes();
         if (nodes.length > 0) {
           entities.value = entities.value.filter(entity => !nodes.includes(entity.id));
@@ -133,7 +180,7 @@ watch([entities, connections], renderNetwork);
 
 <template>
   <div id="controls">
-    <h1>People Network</h1>
+    <h1>ConnMan</h1>
 
     <form @submit.prevent="addEntity">
       <input v-model="newName" placeholder="Name" required />
@@ -148,7 +195,9 @@ watch([entities, connections], renderNetwork);
         <option v-for="p in entities" :key="p.id" :value="p.id">{{ p.name }}</option>
       </select>
       <select v-model="toId">
-        <option v-for="p in entities" :disabled="p.id === fromId" :key="p.id" :value="p.id">{{ p.name }}</option>
+        <option v-for="p in entities" :disabled="p.id === fromId" :key="p.id" :value="p.id">
+          {{ p.name }}
+        </option>
       </select>
       <select v-model="connectionType">
         <option v-for="p in ConnectionType" :key="p" :value="p">{{ p }}</option>
